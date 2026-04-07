@@ -1,0 +1,9 @@
+backend/.env.local
+backend/.env
+__pycache__/
+backend/runtime/
+.venv/
+.deps/
+deps/
+runtime/
+uploads/

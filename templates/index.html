@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Blueprint Navigator</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f4efe8;
+      --panel: #fffaf4;
+      --ink: #1f2933;
+      --accent: #a44a3f;
+      --accent-dark: #7f342b;
+      --line: #dbcfc0;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: Georgia, "Times New Roman", serif;
+      background:
+        radial-gradient(circle at top left, rgba(164, 74, 63, 0.12), transparent 28%),
+        linear-gradient(180deg, #f8f3ec 0%, var(--bg) 100%);
+      color: var(--ink);
+      min-height: 100vh;
+    }
+
+    main {
+      max-width: 880px;
+      margin: 0 auto;
+      padding: 48px 20px;
+    }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 28px;
+      box-shadow: 0 12px 30px rgba(70, 48, 28, 0.08);
+    }
+
+    h1 {
+      margin: 0 0 12px;
+      font-size: clamp(2rem, 4vw, 3.4rem);
+      line-height: 1.05;
+    }
+
+    p {
+      line-height: 1.6;
+      margin: 0 0 16px;
+    }
+
+    form {
+      display: grid;
+      gap: 14px;
+      margin: 24px 0;
+    }
+
+    input[type="file"] {
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: white;
+    }
+
+    button {
+      width: fit-content;
+      border: 0;
+      border-radius: 999px;
+      padding: 12px 18px;
+      background: var(--accent);
+      color: white;
+      font: inherit;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: var(--accent-dark);
+    }
+
+    pre {
+      white-space: pre-wrap;
+      word-break: break-word;
+      background: #201a17;
+      color: #f9f2ec;
+      padding: 16px;
+      border-radius: 14px;
+      min-height: 84px;
+      margin: 0;
+    }
+
+    .endpoints {
+      margin-top: 28px;
+      padding-top: 20px;
+      border-top: 1px solid var(--line);
+    }
+
+    .endpoint {
+      margin: 0 0 10px;
+      font-size: 0.98rem;
+    }
+
+    code {
+      font-family: "Courier New", monospace;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="card">
+      <h1>Blueprint Navigator</h1>
+      <p>Upload a floorplan image to parse rooms, build a grid map, and prepare navigation commands for the robot.</p>
+
+      <form id="upload-form">
+        <input type="file" id="blueprint" name="blueprint" accept="image/*" required>
+        <button type="submit">Upload Blueprint</button>
+      </form>
+
+      <pre id="output">Waiting for upload...</pre>
+
+      <div class="endpoints">
+        <p class="endpoint"><code>POST /upload</code> Upload a blueprint image and parse rooms.</p>
+        <p class="endpoint"><code>POST /set-pose</code> Set the robot start row, column, and heading.</p>
+        <p class="endpoint"><code>POST /navigate</code> Generate a path and motion commands to a room.</p>
+        <p class="endpoint"><code>GET /status</code> Inspect current parser and robot state.</p>
+        <p class="endpoint"><code>GET /get-command</code> Fetch the next queued motion command.</p>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const form = document.getElementById("upload-form");
+    const output = document.getElementById("output");
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+
+      const fileInput = document.getElementById("blueprint");
+      if (!fileInput.files.length) {
+        output.textContent = "Choose an image first.";
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append("blueprint", fileInput.files[0]);
+      output.textContent = "Uploading and parsing blueprint...";
+
+      try {
+        const response = await fetch("/upload", {
+          method: "POST",
+          body: formData
+        });
+
+        const data = await response.json();
+        output.textContent = JSON.stringify(data, null, 2);
+      } catch (error) {
+        output.textContent = "Request failed: " + error.message;
+      }
+    });
+  </script>
+</body>
+</html>

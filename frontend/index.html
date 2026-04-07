@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Blueprint Robot Navigator</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <main class="shell">
+    <section class="panel hero">
+      <div>
+        <p class="eyebrow">Blueprint Robot Navigator</p>
+        <h1>Parse a blueprint, set the robot pose, and publish a room route.</h1>
+        <p class="lede">This frontend matches the FastAPI session model from your plan: upload, parse, place the robot, navigate, override manually, and watch queue state.</p>
+      </div>
+      <div class="status-grid">
+        <article class="status-card">
+          <span>Backend</span>
+          <strong id="health-status">Checking...</strong>
+        </article>
+        <article class="status-card">
+          <span>Firebase</span>
+          <strong id="firebase-status">Checking...</strong>
+        </article>
+      </div>
+    </section>
+
+    <section class="layout">
+      <section class="panel">
+        <h2>Blueprint Setup</h2>
+        <form id="parse-form" class="stack">
+          <input type="file" name="blueprint" accept="image/*" required>
+          <div class="grid-2">
+            <label>Unit<input type="text" name="unit" value="cm"></label>
+            <label>Robot ID<input type="text" name="robot_id" value="robot-1"></label>
+            <label>Wall Thickness<input type="number" name="wall_thickness" value="10" step="0.1"></label>
+            <label>Robot Width<input type="number" name="robot_width" value="18" step="0.1"></label>
+            <label>Robot Length<input type="number" name="robot_length" value="20" step="0.1"></label>
+            <label>Safety Margin<input type="number" name="safety_margin" value="5" step="0.1"></label>
+            <label>Distance Scale Factor<input type="number" name="distance_scale_factor" value="1" step="0.1"></label>
+          </div>
+          <button type="submit">Parse Blueprint</button>
+        </form>
+        <pre id="parse-output">No session yet.</pre>
+      </section>
+
+      <section class="panel">
+        <h2>Map And Pose</h2>
+        <div class="actions preview-actions">
+          <button type="button" id="show-original">Original</button>
+          <button type="button" id="show-grid-raw">Grid Raw</button>
+          <button type="button" id="show-grid-inflated">Grid Inflated</button>
+        </div>
+        <div class="map-shell">
+          <img id="blueprint-image" alt="Blueprint preview">
+          <p id="image-status" class="image-status">No preview yet.</p>
+        </div>
+        <form id="pose-form" class="grid-2 compact">
+          <label>X<input type="number" id="pose-x" step="1"></label>
+          <label>Y<input type="number" id="pose-y" step="1"></label>
+          <label>Heading
+            <select id="pose-heading">
+              <option>N</option>
+              <option>E</option>
+              <option>S</option>
+              <option>W</option>
+            </select>
+          </label>
+          <button type="submit">Set Pose</button>
+        </form>
+        <p class="note">Click the image to prefill X/Y from the selected point.</p>
+      </section>
+
+      <section class="panel">
+        <h2>Rooms</h2>
+        <div id="room-buttons" class="chip-grid"></div>
+      </section>
+
+      <section class="panel">
+        <h2>Manual Controls</h2>
+        <div class="chip-grid">
+          <button data-command="F5cm" class="manual-btn">Forward 5cm</button>
+          <button data-command="B5cm" class="manual-btn">Backward 5cm</button>
+          <button data-command="L90" class="manual-btn">Left 90</button>
+          <button data-command="R90" class="manual-btn">Right 90</button>
+          <button data-command="STOP" class="manual-btn danger">Stop</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Voice Command</h2>
+        <div class="stack">
+          <input id="voice-input" type="text" placeholder="take me to ICU">
+          <div class="actions">
+            <button id="voice-run">Run Command</button>
+            <button id="voice-listen" type="button">Use Microphone</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Queue And Directions</h2>
+        <div id="queue-list" class="queue-list"></div>
+        <pre id="directions-output">No route planned.</pre>
+      </section>
+    </section>
+  </main>
+  <script src="/static/app.js"></script>
+</body>
+</html>
