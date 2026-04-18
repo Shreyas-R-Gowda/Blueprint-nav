@@ -38,6 +38,41 @@ RUNTIME_ROOT = Path(__file__).resolve().parents[3] / "runtime"
 RUNTIME_ROOT.mkdir(parents=True, exist_ok=True)
 
 
+def _best_goal_for_room(grid: np.ndarray, room, cell_size: float) -> tuple[int, int]:
+    candidates: list[tuple[int, int]] = []
+    doorway = room.doorway or room.center
+    candidates.append(room_to_grid(room, cell_size))
+    candidates.append((max(0, int(room.center.y // cell_size)), max(0, int(room.center.x // cell_size))))
+
+    if room.bounding_box is not None:
+        left = room.bounding_box.x // cell_size
+        right = (room.bounding_box.x + room.bounding_box.width) // cell_size
+        top = room.bounding_box.y // cell_size
+        bottom = (room.bounding_box.y + room.bounding_box.height) // cell_size
+        candidates.extend(
+            [
+                (int(doorway.y // cell_size), max(0, int(left) - 1)),
+                (int(doorway.y // cell_size), min(grid.shape[1] - 1, int(right) + 1)),
+                (max(0, int(top) - 1), int(doorway.x // cell_size)),
+                (min(grid.shape[0] - 1, int(bottom) + 1), int(doorway.x // cell_size)),
+            ]
+        )
+
+    seen: set[tuple[int, int]] = set()
+    for row, col in candidates:
+        row = min(max(0, row), grid.shape[0] - 1)
+        col = min(max(0, col), grid.shape[1] - 1)
+        cell = (row, col)
+        if cell in seen:
+            continue
+        seen.add(cell)
+        open_cell = nearest_open_cell(grid, cell)
+        if grid[open_cell[0], open_cell[1]] == 0:
+            return open_cell
+
+    return nearest_open_cell(grid, candidates[0] if candidates else (0, 0))
+
+
 @router.get("/health", response_model=HealthResponse)
 def health() -> HealthResponse:
     return HealthResponse(status="ok", firebase_enabled=firebase_queue.enabled, firebase_error=firebase_queue.error)
@@ -75,7 +110,13 @@ async def parse_blueprint(
         runtime_dir,
     )
     parse_result.original_image_name = original_name
-    session = session_state.create_session(robot_id=robot_id, unit=unit, parse_result=parse_result)
+    session = session_state.create_session(
+        robot_id=robot_id,
+        unit=unit,
+        robot_width=robot_width,
+        robot_length=robot_length,
+        parse_result=parse_result,
+    )
     session_runtime_dir = RUNTIME_ROOT / session.session_id
     if runtime_dir != session_runtime_dir:
         if session_runtime_dir.exists():
@@ -104,10 +145,21 @@ def navigate(request: NavigationRequest):
     if room is None:
         raise HTTPException(status_code=404, detail="Target room not found.")
 
-    grid = np.array(session.parse_result.inflated_grid or session.parse_result.occupancy_grid, dtype=np.uint8)
-    start = nearest_open_cell(grid, pose_to_grid(session.current_pose, 10.0))
-    goal = nearest_open_cell(grid, room_to_grid(room, 10.0))
-    path = astar(grid, start, goal)
+    inflated_grid = np.array(session.parse_result.inflated_grid or session.parse_result.occupancy_grid, dtype=np.uint8)
+    raw_grid = np.array(session.parse_result.occupancy_grid, dtype=np.uint8)
+
+    start = nearest_open_cell(inflated_grid, pose_to_grid(session.current_pose, 10.0))
+    goal = _best_goal_for_room(inflated_grid, room, 10.0)
+    path = astar(inflated_grid, start, goal)
+
+    # Fall back to the raw grid if the inflated map is too conservative.
+    render_grid = inflated_grid
+    if not path:
+        start = nearest_open_cell(raw_grid, pose_to_grid(session.current_pose, 10.0))
+        goal = _best_goal_for_room(raw_grid, room, 10.0)
+        path = astar(raw_grid, start, goal)
+        render_grid = raw_grid
+
     if not path:
         raise HTTPException(status_code=400, detail="No path found.")
 
@@ -120,7 +172,19 @@ def navigate(request: NavigationRequest):
     if image_path.exists():
         image = cv2.imread(str(image_path))
         if image is not None:
-            overlay_name = render_overlay(image, grid, smoothed, runtime_dir / "overlay.png")
+            cell_size_px = max(1, min(image.shape[1] // render_grid.shape[1], image.shape[0] // render_grid.shape[0]))
+            overlay_name = render_overlay(
+                image,
+                render_grid,
+                smoothed,
+                runtime_dir / "overlay.png",
+                cell_size=cell_size_px,
+                start=start,
+                goal=goal,
+                pose=session.current_pose,
+                robot_width=session.robot_width,
+                robot_length=session.robot_length,
+            )
 
     response = build_navigation_response(session.session_id, room, smoothed, directions, commands, overlay_name)
     session_state.replace_queue(session.session_id, response.queue, response.commands, response.directions)
@@ -128,7 +192,10 @@ def navigate(request: NavigationRequest):
     if overlay_name:
         session.parse_result.overlay_image_name = overlay_name
     if firebase_queue.enabled:
-        firebase_queue.publish_queue(session.robot_id, response.queue)
+        try:
+            firebase_queue.publish_queue(session.robot_id, response.queue)
+        except Exception:
+            pass
     return response
 
 
@@ -138,8 +205,11 @@ def manual_override(request: ManualCommandRequest):
     queue = build_manual_queue(request.commands)
     session_state.replace_queue(session.session_id, queue, request.commands, [])
     if firebase_queue.enabled:
-        firebase_queue.cancel_pending(session.robot_id)
-        firebase_queue.publish_queue(session.robot_id, queue)
+        try:
+            firebase_queue.cancel_pending(session.robot_id)
+            firebase_queue.publish_queue(session.robot_id, queue)
+        except Exception:
+            pass
     return session
 
 
@@ -148,7 +218,10 @@ def update_robot_status(update: RobotStatusUpdate):
     if update.session_id:
         session_state.update_robot_status(update.session_id, update.queue_status, update.pose)
     if firebase_queue.enabled:
-        firebase_queue.publish_status(update)
+        try:
+            firebase_queue.publish_status(update)
+        except Exception:
+            pass
     return {"ok": True}
 
 

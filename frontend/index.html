@@ -42,6 +42,7 @@
           </div>
           <button type="submit">Parse Blueprint</button>
         </form>
+        <p id="processing-status" class="status-note">Idle.</p>
         <pre id="parse-output">No session yet.</pre>
       </section>
 
@@ -53,6 +54,10 @@
           <button type="button" id="show-grid-inflated">Grid Inflated</button>
         </div>
         <div class="map-shell">
+          <div id="image-loader" class="image-loader is-hidden" aria-live="polite">
+            <div class="spinner"></div>
+            <span id="image-loader-text">Processing image...</span>
+          </div>
           <img id="blueprint-image" alt="Blueprint preview">
           <p id="image-status" class="image-status">No preview yet.</p>
         </div>

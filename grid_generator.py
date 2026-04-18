@@ -2,6 +2,39 @@ import cv2
 import numpy as np
 
 
+def extract_wall_mask(gray, wall_thickness=4):
+    """
+    Extract structural walls while suppressing text and symbols.
+    """
+    binary = cv2.threshold(gray, 180, 255, cv2.THRESH_BINARY_INV)[1]
+
+    # Keep line-like structures with directional morphology.
+    horizontal_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (max(12, wall_thickness * 6), max(1, wall_thickness)))
+    vertical_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (max(1, wall_thickness), max(12, wall_thickness * 6)))
+
+    horizontal = cv2.morphologyEx(binary, cv2.MORPH_OPEN, horizontal_kernel)
+    vertical = cv2.morphologyEx(binary, cv2.MORPH_OPEN, vertical_kernel)
+    walls = cv2.bitwise_or(horizontal, vertical)
+
+    # Reconnect wall corners and joints after removing label strokes.
+    join_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (max(3, wall_thickness * 2 + 1), max(3, wall_thickness * 2 + 1)))
+    walls = cv2.morphologyEx(walls, cv2.MORPH_CLOSE, join_kernel)
+
+    # Keep only large structural components so labels and compass marks do not
+    # become walls. The actual room walls form the dominant connected network.
+    count, labels, stats, _ = cv2.connectedComponentsWithStats(walls, connectivity=8)
+    filtered = np.zeros_like(walls)
+    min_span = max(gray.shape) * 0.12
+    min_area = gray.shape[0] * gray.shape[1] * 0.002
+
+    for index in range(1, count):
+        x, y, width, height, area = stats[index]
+        if area >= min_area or width >= min_span or height >= min_span:
+            filtered[labels == index] = 255
+
+    return filtered
+
+
 def generate_grid(image_path, cell_size=10, wall_thickness=4):
     """
     Convert blueprint image to a binary occupancy grid.
@@ -16,11 +49,7 @@ def generate_grid(image_path, cell_size=10, wall_thickness=4):
     h, w = gray.shape
     print(f"   Image size: {w}x{h} px")
 
-    _, binary = cv2.threshold(gray, 150, 255, cv2.THRESH_BINARY_INV)
-
-    kernel = np.ones((2, 2), np.uint8)
-    cleaned = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
-    cleaned = cv2.morphologyEx(cleaned, cv2.MORPH_OPEN, kernel)
+    cleaned = extract_wall_mask(gray, wall_thickness=wall_thickness)
 
     grid_w = w // cell_size
     grid_h = h // cell_size
@@ -36,7 +65,7 @@ def generate_grid(image_path, cell_size=10, wall_thickness=4):
             py2 = py1 + cell_size
             block = cleaned[py1:py2, px1:px2]
             wall_ratio = np.sum(block > 0) / block.size
-            grid[row][col] = 1 if wall_ratio > 0.20 else 0
+            grid[row][col] = 1 if wall_ratio > 0.12 else 0
 
     print(f"   Wall cells: {np.sum(grid == 1)}")
     print(f"   Free cells: {np.sum(grid == 0)}")

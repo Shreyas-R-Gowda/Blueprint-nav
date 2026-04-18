@@ -11,12 +11,14 @@ class SessionState:
     def __init__(self) -> None:
         self._sessions: Dict[str, SessionRecord] = {}
 
-    def create_session(self, robot_id: str, unit: str, parse_result: ParseResult) -> SessionRecord:
+    def create_session(self, robot_id: str, unit: str, robot_width: float, robot_length: float, parse_result: ParseResult) -> SessionRecord:
         session_id = uuid4().hex
         session = SessionRecord(
             session_id=session_id,
             robot_id=robot_id,
             unit=unit,
+            robot_width=robot_width,
+            robot_length=robot_length,
             parse_result=parse_result,
             created_at=datetime.now(timezone.utc).isoformat(),
         )

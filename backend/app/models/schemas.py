@@ -128,6 +128,8 @@ class SessionRecord(BaseModel):
     session_id: str
     robot_id: str
     unit: str
+    robot_width: float = 0.0
+    robot_length: float = 0.0
     parse_result: ParseResult
     current_pose: Optional[RobotPose] = None
     initial_pose: Optional[RobotPose] = None
