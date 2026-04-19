@@ -1,0 +1,1184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Blueprint Navigation System</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body { font-family: Arial, sans-serif; background: #1a1a2e; color: #eee; min-height: 100vh; }
+
+    /* ── HEADER ─────────────────────────────────────────────────────── */
+    header {
+      background: #16213e;
+      padding: 0.6rem 1.25rem;
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      flex-wrap: wrap;
+      border-bottom: 1px solid #1e2a40;
+      min-height: 48px;
+    }
+    header h1 { font-size: 1.05rem; color: #00d4ff; flex: 1; white-space: nowrap; }
+
+    .badge {
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 0.7rem;
+      font-weight: bold;
+      background: #0f3460;
+      white-space: nowrap;
+    }
+    .badge.ok     { background: #0d6e38; color: #aff; }
+    .badge.warn   { background: #6e1515; color: #faa; }
+    .badge.active { background: #0a3060; color: #7cf; }
+
+    /* ── LAYOUT ─────────────────────────────────────────────────────── */
+    .container {
+      display: grid;
+      grid-template-columns: 280px 1fr 268px;
+      gap: 0.65rem;
+      padding: 0.65rem;
+      height: calc(100vh - 48px);
+    }
+
+    .panel {
+      background: #16213e;
+      border-radius: 8px;
+      padding: 0.8rem;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 0.9rem;
+    }
+
+    .panel-section { display: flex; flex-direction: column; gap: 0.35rem; }
+
+    h2 {
+      font-size: 0.72rem;
+      color: #00d4ff;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      padding-bottom: 0.25rem;
+      border-bottom: 1px solid #1e2a40;
+      margin-bottom: 0.1rem;
+    }
+
+    label { font-size: 0.76rem; color: #999; display: block; }
+
+    input[type=file], input[type=number], select {
+      width: 100%;
+      padding: 5px 8px;
+      background: #0f3460;
+      border: 1px solid #2a3a5a;
+      border-radius: 4px;
+      color: #eee;
+      font-size: 0.8rem;
+    }
+
+    button {
+      width: 100%;
+      padding: 7px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.8rem;
+      transition: background 0.12s, opacity 0.12s;
+    }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .btn-primary { background: #00d4ff; color: #000; font-weight: bold; }
+    .btn-primary:hover:not(:disabled)   { background: #00b8d9; }
+    .btn-secondary { background: #0f3460; color: #ddd; }
+    .btn-secondary:hover:not(:disabled) { background: #1a4a80; }
+    .btn-danger { background: #7a1a1a; color: #fcc; }
+    .btn-danger:hover:not(:disabled)    { background: #9a2020; }
+
+    /* ── ROOM BUTTONS ────────────────────────────────────────────────── */
+    #roomButtons { display: flex; flex-direction: column; gap: 3px; }
+
+    .room-btn {
+      background: #0f3460;
+      color: #ddd;
+      text-align: left;
+      padding: 6px 10px;
+      border-radius: 4px;
+      font-size: 0.78rem;
+      transition: background 0.12s;
+    }
+    .room-btn:hover:not(:disabled) { background: #1a5080; }
+    .room-btn.selected {
+      background: #00d4ff;
+      color: #000;
+      font-weight: bold;
+    }
+
+    /* ── STATUS ROWS ─────────────────────────────────────────────────── */
+    .status-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.76rem;
+      padding: 3px 0;
+      border-bottom: 1px solid #1a2338;
+    }
+    .status-label { color: #778; }
+    .status-val   { color: #00d4ff; font-weight: bold; font-family: monospace; }
+
+    /* ── MAP AREA ────────────────────────────────────────────────────── */
+    .map-area {
+      background: #0d0d1a;
+      border-radius: 8px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .map-toolbar {
+      background: #111827;
+      padding: 5px 10px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      font-size: 0.72rem;
+      flex-shrink: 0;
+      border-bottom: 1px solid #1a2338;
+    }
+    .map-toolbar label {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      cursor: pointer;
+      color: #99a;
+      font-size: 0.72rem;
+    }
+    .map-toolbar input[type=checkbox] { accent-color: #00d4ff; width: auto; }
+    #canvasInfo { margin-left: auto; color: #445; font-size: 0.68rem; font-family: monospace; }
+
+    .canvas-wrap {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      position: relative;
+    }
+
+    #blueprintCanvas {
+      max-width: 100%;
+      max-height: 100%;
+      display: none;
+      cursor: crosshair;
+    }
+
+    .canvas-placeholder {
+      color: #2a3a50;
+      font-size: 0.9rem;
+      text-align: center;
+      pointer-events: none;
+    }
+
+    /* ── SPINNER ─────────────────────────────────────────────────────── */
+    .spinner-overlay {
+      display: none;
+      position: absolute;
+      inset: 0;
+      background: rgba(10, 10, 26, 0.88);
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 0.9rem;
+      z-index: 10;
+    }
+    .spinner-overlay.active { display: flex; }
+
+    .spinner {
+      width: 50px;
+      height: 50px;
+      border: 5px solid #1e2a40;
+      border-top-color: #00d4ff;
+      border-radius: 50%;
+      animation: spin 0.85s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner-text { color: #00d4ff; font-size: 0.9rem; }
+    .spinner-sub  { color: #556; font-size: 0.72rem; }
+
+    /* ── COMMAND QUEUE ───────────────────────────────────────────────── */
+    .cmd-list {
+      background: #0a0a1a;
+      border-radius: 4px;
+      padding: 6px;
+      font-size: 0.76rem;
+      font-family: monospace;
+      max-height: 130px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+    }
+    .cmd-done    { color: #334; text-decoration: line-through; padding: 1px 4px; }
+    .cmd-active  { color: #00ff88; font-weight: bold; background: rgba(0,255,136,0.1); padding: 1px 6px; border-radius: 3px; border-left: 3px solid #00ff88; }
+    .cmd-pending { color: #889; padding: 1px 4px; }
+    .cmd-empty   { color: #334; font-style: italic; }
+
+    /* ── LOG ─────────────────────────────────────────────────────────── */
+    .log {
+      background: #0a0a1a;
+      border-radius: 4px;
+      padding: 6px 8px;
+      font-size: 0.7rem;
+      font-family: monospace;
+      max-height: 100px;
+      overflow-y: auto;
+      flex: 1;
+    }
+    .log-err  { color: #f66; }
+    .log-info { color: #5af; }
+    .log-ok   { color: #5f5; }
+
+    /* ── MANUAL D-PAD ────────────────────────────────────────────────── */
+    .dpad {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 4px;
+    }
+    .dpad button { padding: 9px; font-size: 1rem; }
+
+    /* ── VOICE ───────────────────────────────────────────────────────── */
+    .voice-btn { background: #3d1a52; color: #ddd; }
+    .voice-btn:hover:not(:disabled) { background: #5a2575; }
+    .voice-btn.listening { background: #7a1515; animation: pulse 1s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.55} }
+
+    /* ── SCROLLBARS ──────────────────────────────────────────────────── */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: #0a0a1a; }
+    ::-webkit-scrollbar-thumb { background: #2a3a50; border-radius: 2px; }
+
+    /* ── MOBILE ──────────────────────────────────────────────────────── */
+    @media (max-width: 900px) {
+      .container {
+        grid-template-columns: 1fr;
+        height: auto;
+      }
+      .map-area { height: 65vw; min-height: 240px; }
+      .panel    { max-height: none; }
+    }
+
+    /* ── TOAST ───────────────────────────────────────────────────────── */
+    #toast {
+      position: fixed;
+      top: 60px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #0d6e38;
+      color: #aaffcc;
+      padding: 8px 22px;
+      border-radius: 20px;
+      font-size: 0.82rem;
+      font-weight: bold;
+      z-index: 200;
+      opacity: 0;
+      pointer-events: none;
+      white-space: nowrap;
+      transition: opacity 0.35s ease;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+    }
+    #toast.show { opacity: 1; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>🗺️ Blueprint Navigation System</h1>
+  <span class="badge" id="parseBadge">No blueprint</span>
+  <span class="badge" id="connectBadge">Connecting…</span>
+  <button class="btn-danger" onclick="resetAll()"
+          style="width:auto;padding:3px 12px;font-size:0.74rem;margin-left:auto">
+    ↺ Reset
+  </button>
+</header>
+
+<div class="container">
+
+  <!-- ── LEFT: Setup ─────────────────────────────────────────────────── -->
+  <div class="panel">
+
+    <div class="panel-section">
+      <h2>Blueprint</h2>
+      <label>Image file</label>
+      <input type="file" id="blueprintFile" accept="image/*">
+      <label>Unit</label>
+      <select id="unitSelect">
+        <option value="ft" selected>ft</option>
+        <option value="cm">cm</option>
+        <option value="m">m</option>
+      </select>
+      <p style="font-size:0.68rem;color:#556;margin-top:1px">
+        Use ft for most printed floor plans, cm for cardboard models
+      </p>
+      <label>Building width (<span id="unitLabel">ft</span>)</label>
+      <input type="number" id="buildingWidth" min="1" step="0.1" placeholder="e.g. 2000">
+      <label>Robot width (cm)</label>
+      <input type="number" id="robotWidth" value="60" min="10" step="1">
+      <label>Safety margin (cm)</label>
+      <input type="number" id="safetyMargin" value="10" min="0" step="1">
+      <button class="btn-primary" id="uploadBtn" onclick="uploadBlueprint()">
+        📤 Upload &amp; Parse
+      </button>
+    </div>
+
+    <div class="panel-section">
+      <h2>Robot Start</h2>
+      <label>Initial Heading</label>
+      <select id="headingSelect">
+        <option value="N">North ↑</option>
+        <option value="S">South ↓</option>
+        <option value="E">East →</option>
+        <option value="W">West ←</option>
+      </select>
+      <p style="font-size:0.7rem;color:#445;margin-top:2px">
+        Click the map to place the robot
+      </p>
+    </div>
+
+    <div class="panel-section" style="flex:1;min-height:0">
+      <h2>Rooms</h2>
+      <div id="roomButtons">
+        <p style="font-size:0.76rem;color:#334">Upload blueprint first</p>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── CENTRE: Map ──────────────────────────────────────────────────── -->
+  <div class="map-area">
+
+    <div class="map-toolbar">
+      <label>
+        <input type="checkbox" id="toggleGrid" checked onchange="redrawCanvas()">
+        Grid
+      </label>
+      <label>
+        <input type="checkbox" id="togglePath" checked onchange="redrawCanvas()">
+        Path
+      </label>
+      <span id="canvasInfo"></span>
+    </div>
+
+    <div class="canvas-wrap">
+      <div class="canvas-placeholder" id="canvasPlaceholder">
+        📂 Upload a blueprint to begin
+      </div>
+      <canvas id="blueprintCanvas"></canvas>
+
+      <div class="spinner-overlay" id="uploadSpinner">
+        <div class="spinner"></div>
+        <p class="spinner-text">Running OCR…</p>
+        <p class="spinner-sub">This takes 30–60 seconds</p>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── RIGHT: Controls & Status ────────────────────────────────────── -->
+  <div class="panel">
+
+    <div class="panel-section">
+      <h2>Status</h2>
+      <div class="status-row">
+        <span class="status-label">Parse</span>
+        <span class="status-val" id="statParse">—</span>
+      </div>
+      <div class="status-row">
+        <span class="status-label">Rooms</span>
+        <span class="status-val" id="statRooms">—</span>
+      </div>
+      <div class="status-row">
+        <span class="status-label">Row</span>
+        <span class="status-val" id="statRow">—</span>
+      </div>
+      <div class="status-row">
+        <span class="status-label">Col</span>
+        <span class="status-val" id="statCol">—</span>
+      </div>
+      <div class="status-row">
+        <span class="status-label">Heading</span>
+        <span class="status-val" id="statHeading">—</span>
+      </div>
+      <div class="status-row">
+        <span class="status-label">Cmds left</span>
+        <span class="status-val" id="statQueue">—</span>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <h2>Command Queue</h2>
+      <div class="cmd-list" id="cmdList">
+        <span class="cmd-empty">No commands</span>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <h2>Voice</h2>
+      <button class="btn-secondary voice-btn" id="voiceBtn" onclick="startVoice()">
+        🎤 Say destination
+      </button>
+      <p id="voiceStatus" style="font-size:0.7rem;color:#556;min-height:1rem"></p>
+    </div>
+
+    <div class="panel-section">
+      <h2>Manual Controls</h2>
+      <div class="dpad">
+        <div></div>
+        <button class="btn-secondary" onclick="manualMove('F')">↑</button>
+        <div></div>
+        <button class="btn-secondary" onclick="manualMove('L')">←</button>
+        <button class="btn-secondary" onclick="manualMove('S')"
+                style="font-size:0.7rem">STOP</button>
+        <button class="btn-secondary" onclick="manualMove('R')">→</button>
+        <div></div>
+        <button class="btn-secondary" onclick="manualMove('B')">↓</button>
+        <div></div>
+      </div>
+    </div>
+
+    <div class="panel-section" style="flex:1;min-height:0">
+      <h2>Log</h2>
+      <div class="log" id="logBox"></div>
+    </div>
+
+  </div>
+
+</div>
+
+<!-- Toast notification -->
+<div id="toast"></div>
+
+<script>
+const API = "http://localhost:8080";
+
+// ── STATE ─────────────────────────────────────────────────────────────────
+let blueprintImg  = null;   // HTMLImageElement
+let wallGrid      = null;   // { cells: Uint8Array, rows, cols }
+let parsedRooms   = [];
+let robotPose     = { row: 0, col: 0, heading: "N" };
+let poseSet       = false;
+let selectedRoom  = null;
+let fullCmdList        = [];     // commands from last /navigate (never shrinks)
+let currentPath        = [];     // reconstructed waypoints [{row,col}]
+let navGoal            = null;   // {row, col}
+let detectedOrientation = null;  // 'N','S','E','W' from parse result
+
+// ── LOGGING ───────────────────────────────────────────────────────────────
+function log(msg, type = "info") {
+  const box = document.getElementById("logBox");
+  const el  = document.createElement("div");
+  el.className   = `log-${type}`;
+  el.textContent = `${new Date().toLocaleTimeString()} ${msg}`;
+  box.appendChild(el);
+  box.scrollTop = box.scrollHeight;
+}
+
+// ── UPLOAD ────────────────────────────────────────────────────────────────
+async function uploadBlueprint() {
+  const file = document.getElementById("blueprintFile").files[0];
+  if (!file) { log("No file selected", "err"); return; }
+
+  const btn = document.getElementById("uploadBtn");
+  btn.disabled    = true;
+  btn.textContent = "⏳ Parsing…";
+  setBadge("parseBadge", "Parsing…", "active");
+  showSpinner(true);
+  log("Upload started — OCR running…");
+
+  // Reset path/goal so stale drawing doesn't linger
+  currentPath = [];
+  navGoal     = null;
+  fullCmdList = [];
+
+  const unit          = document.getElementById("unitSelect").value;
+  const buildingWidth = document.getElementById("buildingWidth").value;
+  const robotWidth    = document.getElementById("robotWidth").value;
+  const safetyMargin  = document.getElementById("safetyMargin").value;
+
+  const fd = new FormData();
+  fd.append("blueprint", file);
+  fd.append("unit", unit);
+  fd.append("robot_width", robotWidth);
+  fd.append("safety_margin", safetyMargin);
+  if (buildingWidth) fd.append("building_width", buildingWidth);
+
+  try {
+    const res  = await fetch(`${API}/upload`, { method: "POST", body: fd });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+
+    parsedRooms = data.rooms || [];
+    detectedOrientation = data.orientation?.direction || null;
+    renderRoomButtons(parsedRooms);
+
+    const status = data.parse_status;
+    const cmPerCell = data.real_cm_per_cell?.toFixed(1) ?? "10.0";
+    const inflation = data.inflation_cells ?? "—";
+
+    if (status === "COMPLETE") {
+      setBadge("parseBadge", "✅ COMPLETE", "ok");
+      log(`Parse complete — ${parsedRooms.length} rooms, ` +
+          `grid ${data.grid_size?.cols}×${data.grid_size?.rows}, ` +
+          `${cmPerCell} cm/cell, inflation ${inflation} cells`, "ok");
+      showToast(`Blueprint parsed — ${parsedRooms.length} rooms detected`);
+    } else {
+      setBadge("parseBadge", "⚠️ INCOMPLETE", "warn");
+      log(`Parse incomplete: ${data.missing_fields?.join(", ") || "unknown"} — ` +
+          `${cmPerCell} cm/cell`, "err");
+      showToast(`Parsed with missing fields — check log`);
+    }
+
+    document.getElementById("statParse").textContent = status || "—";
+    document.getElementById("statRooms").textContent = parsedRooms.length;
+
+    loadImageToCanvas(file);
+
+  } catch (e) {
+    setBadge("parseBadge", "❌ Error", "warn");
+    log(`Upload failed: ${e.message}`, "err");
+    showSpinner(false);
+    btn.disabled    = false;
+    btn.textContent = "📤 Upload & Parse";
+  }
+}
+
+function loadImageToCanvas(file) {
+  const img = new Image();
+  img.onload = () => {
+    blueprintImg = img;
+
+    const canvas = document.getElementById("blueprintCanvas");
+    canvas.width  = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    canvas.style.display = "block";
+    document.getElementById("canvasPlaceholder").style.display = "none";
+
+    // Compute wall grid client-side — mirrors grid_generator.py threshold logic
+    wallGrid = computeWallGrid(img);
+    document.getElementById("canvasInfo").textContent =
+      `${img.naturalWidth}×${img.naturalHeight}px  |  ${wallGrid.cols}×${wallGrid.rows} cells`;
+
+    redrawCanvas();
+    showSpinner(false);
+
+    const btn       = document.getElementById("uploadBtn");
+    btn.disabled    = false;
+    btn.textContent = "📤 Upload & Parse";
+  };
+  img.onerror = () => {
+    log("Image load failed", "err");
+    showSpinner(false);
+  };
+  img.src = URL.createObjectURL(file);
+}
+
+// ── WALL GRID ─────────────────────────────────────────────────────────────
+// Uses morphological opening (erosion → dilation) before cell classification
+// so that isolated thin text strokes are removed while thick continuous wall
+// lines survive. Text strokes are ~1-2px wide; wall lines are ~4-5px wide.
+function computeWallGrid(img) {
+  const CELL = 10;
+  const W    = img.naturalWidth;
+  const H    = img.naturalHeight;
+  const GW   = Math.floor(W / CELL);
+  const GH   = Math.floor(H / CELL);
+
+  // Read pixels from an offscreen canvas
+  const off  = document.createElement("canvas");
+  off.width  = W;
+  off.height = H;
+  const octx = off.getContext("2d");
+  octx.drawImage(img, 0, 0);
+  const px = octx.getImageData(0, 0, W, H).data;
+
+  // Step 1 — Grayscale + threshold → flat binary mask
+  // 1 = dark (wall candidate), 0 = light (free space)
+  const binary = new Uint8Array(W * H);
+  for (let i = 0; i < W * H; i++) {
+    const p    = i * 4;
+    const gray = px[p] * 0.299 + px[p + 1] * 0.587 + px[p + 2] * 0.114;
+    binary[i]  = gray < 150 ? 1 : 0;
+  }
+
+  // Step 2 — 3×3 Erosion
+  // A pixel stays wall only when ALL 9 cells in its 3×3 neighbourhood are dark.
+  // This kills thin text strokes (≤2px) entirely; thick wall lines (4-5px) keep
+  // a surviving core of 2-3px.
+  const eroded = new Uint8Array(W * H);
+  for (let y = 1; y < H - 1; y++) {
+    for (let x = 1; x < W - 1; x++) {
+      let all = 1;
+      check: for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if (binary[(y + dy) * W + (x + dx)] === 0) { all = 0; break check; }
+        }
+      }
+      eroded[y * W + x] = all;
+    }
+  }
+
+  // Step 3 — 3×3 Dilation
+  // A pixel becomes wall if ANY cell in its 3×3 neighbourhood survived erosion.
+  // Restores wall lines back to approximately their original thickness.
+  const opened = new Uint8Array(W * H);
+  for (let y = 1; y < H - 1; y++) {
+    for (let x = 1; x < W - 1; x++) {
+      let any = 0;
+      check: for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if (eroded[(y + dy) * W + (x + dx)] === 1) { any = 1; break check; }
+        }
+      }
+      opened[y * W + x] = any;
+    }
+  }
+
+  // Step 4 — Cell classification
+  // Raised from 20% → 35%: any text pixels that survive opening need a higher
+  // density before they tip a cell into "wall".
+  const dark  = new Int32Array(GH * GW);
+  const LIMIT = CELL * CELL * 0.35;
+
+  for (let y = 0; y < H; y++) {
+    const r = Math.floor(y / CELL);
+    if (r >= GH) continue;
+    for (let x = 0; x < W; x++) {
+      const c = Math.floor(x / CELL);
+      if (c >= GW) continue;
+      if (opened[y * W + x] === 1) dark[r * GW + c]++;
+    }
+  }
+
+  const cells = new Uint8Array(GH * GW);
+  for (let i = 0; i < cells.length; i++) {
+    cells[i] = dark[i] > LIMIT ? 1 : 0;
+  }
+
+  return { cells, rows: GH, cols: GW };
+}
+
+// ── CANVAS REDRAW ─────────────────────────────────────────────────────────
+function redrawCanvas() {
+  if (!blueprintImg) return;
+  const canvas = document.getElementById("blueprintCanvas");
+  const ctx    = canvas.getContext("2d");
+  const CS     = 10;
+
+  // 1. Blueprint base image
+  ctx.drawImage(blueprintImg, 0, 0);
+
+  // 2. Wall grid overlay
+  if (document.getElementById("toggleGrid").checked && wallGrid) {
+    ctx.fillStyle = "rgba(220, 55, 55, 0.22)";
+    const { cells, rows, cols } = wallGrid;
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        if (cells[r * cols + c] === 1) {
+          ctx.fillRect(c * CS, r * CS, CS, CS);
+        }
+      }
+    }
+  }
+
+  // 3. A* path
+  if (document.getElementById("togglePath").checked && currentPath.length > 1) {
+    drawPath(ctx, CS);
+  }
+
+  // 4. Robot
+  if (poseSet) drawRobot(ctx, CS);
+
+  // 5. North arrow (top-right corner, always on top)
+  if (detectedOrientation) drawNorthArrow(ctx, canvas.width, canvas.height);
+}
+
+function drawPath(ctx, cs) {
+  ctx.save();
+
+  // Path line — dashed cyan
+  ctx.strokeStyle = "#00d4ff";
+  ctx.lineWidth   = 2.5;
+  ctx.lineJoin    = "round";
+  ctx.setLineDash([5, 4]);
+  ctx.beginPath();
+  ctx.moveTo(currentPath[0].col * cs + cs / 2,
+             currentPath[0].row * cs + cs / 2);
+  for (let i = 1; i < currentPath.length; i++) {
+    ctx.lineTo(currentPath[i].col * cs + cs / 2,
+               currentPath[i].row * cs + cs / 2);
+  }
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Intermediate waypoints
+  ctx.fillStyle = "#00d4ff";
+  for (let i = 1; i < currentPath.length - 1; i++) {
+    ctx.beginPath();
+    ctx.arc(currentPath[i].col * cs + cs / 2,
+            currentPath[i].row * cs + cs / 2, 3, 0, 2 * Math.PI);
+    ctx.fill();
+  }
+
+  // Goal marker
+  if (navGoal) {
+    const gx = navGoal.col * cs + cs / 2;
+    const gy = navGoal.row * cs + cs / 2;
+
+    // Outer glow
+    ctx.beginPath();
+    ctx.arc(gx, gy, 11, 0, 2 * Math.PI);
+    ctx.fillStyle = "rgba(255,60,60,0.25)";
+    ctx.fill();
+
+    // Red dot
+    ctx.beginPath();
+    ctx.arc(gx, gy, 7, 0, 2 * Math.PI);
+    ctx.fillStyle   = "#ff3333";
+    ctx.fill();
+    ctx.strokeStyle = "#fff";
+    ctx.lineWidth   = 1.5;
+    ctx.stroke();
+
+    // "G" label
+    ctx.fillStyle    = "#fff";
+    ctx.font         = "bold 8px Arial";
+    ctx.textAlign    = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("G", gx, gy);
+  }
+
+  ctx.restore();
+}
+
+function drawRobot(ctx, cs) {
+  const x   = robotPose.col * cs + cs / 2;
+  const y   = robotPose.row * cs + cs / 2;
+  const DIR = { N:[0,-1], S:[0,1], E:[1,0], W:[-1,0] };
+  const [adx, ady] = DIR[robotPose.heading] || [0, -1];
+
+  ctx.save();
+
+  // Glow
+  ctx.beginPath();
+  ctx.arc(x, y, 12, 0, 2 * Math.PI);
+  ctx.fillStyle = "rgba(0,255,136,0.15)";
+  ctx.fill();
+
+  // Body
+  ctx.beginPath();
+  ctx.arc(x, y, 8, 0, 2 * Math.PI);
+  ctx.fillStyle   = "#00ff88";
+  ctx.fill();
+  ctx.strokeStyle = "#fff";
+  ctx.lineWidth   = 2;
+  ctx.stroke();
+
+  // Heading arrow
+  ctx.strokeStyle = "#002a14";
+  ctx.lineWidth   = 2.5;
+  ctx.lineCap     = "round";
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  ctx.lineTo(x + adx * 13, y + ady * 13);
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.arc(x + adx * 13, y + ady * 13, 2.5, 0, 2 * Math.PI);
+  ctx.fillStyle = "#002a14";
+  ctx.fill();
+
+  ctx.restore();
+}
+
+// ── CLICK → SET POSE ──────────────────────────────────────────────────────
+document.getElementById("blueprintCanvas").addEventListener("click", async (e) => {
+  if (!blueprintImg) return;
+  const canvas = e.currentTarget;
+  const rect   = canvas.getBoundingClientRect();
+  const scaleX = canvas.width  / rect.width;
+  const scaleY = canvas.height / rect.height;
+  const px = (e.clientX - rect.left) * scaleX;
+  const py = (e.clientY - rect.top)  * scaleY;
+  const col     = Math.floor(px / 10);
+  const row     = Math.floor(py / 10);
+  const heading = document.getElementById("headingSelect").value;
+
+  robotPose = { row, col, heading };
+  poseSet   = true;
+
+  try {
+    await fetch(`${API}/set-pose`, {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ row, col, heading }),
+    });
+    log(`Pose set → row ${row}, col ${col}, heading ${heading}`, "ok");
+    updateStatusPanel();
+    redrawCanvas();
+  } catch (e) {
+    log(`Set pose failed: ${e.message}`, "err");
+  }
+});
+
+// ── ROOM BUTTONS ──────────────────────────────────────────────────────────
+function renderRoomButtons(rooms) {
+  const container = document.getElementById("roomButtons");
+  container.innerHTML = "";
+
+  const visible = rooms.filter(r => r.name.toUpperCase() !== "CORRIDOR");
+  if (!visible.length) {
+    container.innerHTML = '<p style="font-size:0.76rem;color:#334">No rooms detected</p>';
+    return;
+  }
+
+  visible.forEach(room => {
+    const btn = document.createElement("button");
+    btn.className    = "room-btn";
+    btn.dataset.room = room.name;
+
+    const dimLabel = room.dimensions
+      ? ` <span style="color:#556;font-size:0.68rem">` +
+        `${room.dimensions.north_south}×${room.dimensions.east_west}</span>`
+      : "";
+    btn.innerHTML = `🚪 ${room.name}${dimLabel}`;
+
+    btn.onclick = () => {
+      setSelectedRoom(room.name);
+      navigateTo(room.name);
+    };
+    container.appendChild(btn);
+  });
+}
+
+function setSelectedRoom(name) {
+  selectedRoom = name;
+  document.querySelectorAll(".room-btn").forEach(btn => {
+    btn.classList.toggle("selected", btn.dataset.room === name);
+  });
+}
+
+// ── NAVIGATE ──────────────────────────────────────────────────────────────
+async function navigateTo(roomName) {
+  if (!poseSet) {
+    log("Click the map to set robot position first", "err");
+    return;
+  }
+  log(`Navigating → ${roomName}…`);
+
+  // Flash "computing" message while server runs A*
+  document.getElementById("cmdList").innerHTML =
+    '<span style="color:#00d4ff;font-style:italic">⏳ Computing route…</span>';
+
+  try {
+    const res  = await fetch(`${API}/navigate`, {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ room: roomName }),
+    });
+    const data = await res.json();
+
+    if (!res.ok || data.error) {
+      log(data.error || `HTTP ${res.status}`, "err");
+      if (data.available_rooms) {
+        log(`Available: ${data.available_rooms.join(", ")}`, "info");
+      }
+      return;
+    }
+
+    fullCmdList = [...(data.commands || [])];
+    renderCommandQueue(fullCmdList, 0);
+
+    // Reconstruct drawable path from start + commands
+    const [startRow, startCol] = data.start;
+    const [goalRow,  goalCol]  = data.goal;
+    navGoal     = { row: goalRow, col: goalCol };
+    currentPath = commandsToPath(startRow, startCol, robotPose.heading, fullCmdList);
+
+    redrawCanvas();
+    updateStatusPanel();
+    log(`Path: ${data.path_cells} cells → ${fullCmdList.length} commands`, "ok");
+
+  } catch (e) {
+    log(`Navigate failed: ${e.message}`, "err");
+  }
+}
+
+// ── COMMANDS → PATH WAYPOINTS ─────────────────────────────────────────────
+// Mirrors the motion model in astar.py path_to_commands (in reverse)
+function commandsToPath(startRow, startCol, heading, commands) {
+  const DIR = { N:[-1,0], S:[1,0], E:[0,1], W:[0,-1] };
+  const CW  = { N:"E", E:"S", S:"W", W:"N" };
+  const CCW = { N:"W", W:"S", S:"E", E:"N" };
+
+  let row = startRow, col = startCol, dir = heading;
+  const pts = [{ row, col }];
+
+  for (const cmd of commands) {
+    if      (cmd === "R90")          dir = CW[dir];
+    else if (cmd === "L90")          dir = CCW[dir];
+    else if (cmd === "R180")         { dir = CW[dir]; dir = CW[dir]; }
+    else if (cmd.startsWith("F")) {
+      const cells = parseInt(cmd.slice(1), 10) / 10;
+      const [dr, dc] = DIR[dir];
+      row += dr * cells;
+      col += dc * cells;
+      pts.push({ row: Math.round(row), col: Math.round(col) });
+    }
+  }
+  return pts;
+}
+
+// ── COMMAND QUEUE DISPLAY ─────────────────────────────────────────────────
+function renderCommandQueue(full, consumed) {
+  const box = document.getElementById("cmdList");
+  box.innerHTML = "";
+
+  if (!full.length) {
+    box.innerHTML = '<span class="cmd-empty">No commands</span>';
+    return;
+  }
+
+  full.forEach((cmd, i) => {
+    const div = document.createElement("div");
+    if (i < consumed) {
+      div.className   = "cmd-done";
+      div.textContent = `${i + 1}. ${cmd}`;
+    } else if (i === consumed) {
+      div.className   = "cmd-active";
+      div.textContent = `▶ ${i + 1}. ${cmd}`;
+    } else {
+      div.className   = "cmd-pending";
+      div.textContent = `${i + 1}. ${cmd}`;
+    }
+    box.appendChild(div);
+  });
+
+  const active = box.querySelector(".cmd-active");
+  if (active) active.scrollIntoView({ block: "nearest" });
+}
+
+// ── STATUS PANEL ──────────────────────────────────────────────────────────
+function updateStatusPanel() {
+  document.getElementById("statRow").textContent     = poseSet ? robotPose.row     : "—";
+  document.getElementById("statCol").textContent     = poseSet ? robotPose.col     : "—";
+  document.getElementById("statHeading").textContent = poseSet ? robotPose.heading : "—";
+  document.getElementById("statQueue").textContent   = fullCmdList.length || "—";
+}
+
+// ── POLL /status every 3s ─────────────────────────────────────────────────
+async function pollStatus() {
+  try {
+    const res  = await fetch(`${API}/status`);
+    const data = await res.json();
+
+    setBadge("connectBadge", "🟢 Connected", "ok");
+    document.getElementById("statParse").textContent = data.parse_status || "—";
+    if (data.rooms_detected !== undefined)
+      document.getElementById("statRooms").textContent = data.rooms_detected || "—";
+
+    // Sync command queue with server's shrinking list (ESP32 consuming commands)
+    if (fullCmdList.length > 0 && Array.isArray(data.command_queue)) {
+      const consumed = Math.max(0, fullCmdList.length - data.command_queue.length);
+      document.getElementById("statQueue").textContent = data.command_queue.length;
+      renderCommandQueue(fullCmdList, consumed);
+    }
+
+  } catch {
+    setBadge("connectBadge", "🔴 Disconnected", "warn");
+  }
+}
+
+// ── RESET ─────────────────────────────────────────────────────────────────
+function resetAll() {
+  blueprintImg = null;
+  wallGrid     = null;
+  parsedRooms  = [];
+  robotPose    = { row: 0, col: 0, heading: "N" };
+  poseSet      = false;
+  selectedRoom = null;
+  fullCmdList  = [];
+  currentPath  = [];
+  navGoal      = null;
+
+  const canvas = document.getElementById("blueprintCanvas");
+  canvas.getContext("2d").clearRect(0, 0, canvas.width, canvas.height);
+  canvas.style.display = "none";
+  document.getElementById("canvasPlaceholder").style.display = "";
+  document.getElementById("canvasInfo").textContent = "";
+
+  setBadge("parseBadge", "No blueprint", "");
+  document.getElementById("roomButtons").innerHTML =
+    '<p style="font-size:0.76rem;color:#334">Upload blueprint first</p>';
+  document.getElementById("cmdList").innerHTML =
+    '<span class="cmd-empty">No commands</span>';
+  document.getElementById("blueprintFile").value = "";
+
+  ["statRow","statCol","statHeading","statParse","statQueue","statRooms"]
+    .forEach(id => document.getElementById(id).textContent = "—");
+
+  const btn       = document.getElementById("uploadBtn");
+  btn.disabled    = false;
+  btn.textContent = "📤 Upload & Parse";
+
+  log("Reset complete — ready for new blueprint");
+}
+
+// ── MANUAL CONTROLS ───────────────────────────────────────────────────────
+function manualMove(dir) {
+  const labels = { F:"Forward 50cm", B:"Backward 50cm", L:"Left 90°", R:"Right 90°", S:"STOP" };
+  log(`Manual: ${labels[dir] || dir}`);
+  // Wire to Firebase / ESP32 direct in Phase 6
+}
+
+// ── VOICE ─────────────────────────────────────────────────────────────────
+function startVoice() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { log("Speech recognition not supported", "err"); return; }
+
+  const recog = new SR();
+  recog.lang          = "en-US";
+  recog.interimResults = false;
+
+  const btn = document.getElementById("voiceBtn");
+  btn.classList.add("listening");
+  btn.textContent = "🔴 Listening…";
+  document.getElementById("voiceStatus").textContent = "Speak now…";
+
+  recog.onresult = ({ results }) => {
+    const transcript = results[0][0].transcript.toLowerCase();
+    log(`Voice: "${transcript}"`);
+    document.getElementById("voiceStatus").textContent = `Heard: "${transcript}"`;
+
+    const match = parsedRooms.find(r =>
+      transcript.includes(r.name.toLowerCase()) ||
+      r.name.toLowerCase().includes(transcript)
+    );
+    if (match) {
+      log(`Voice matched → ${match.name}`, "ok");
+      setSelectedRoom(match.name);
+      navigateTo(match.name);
+    } else {
+      log(`No room matched: "${transcript}"`, "err");
+    }
+  };
+
+  recog.onerror = ({ error }) => log(`Voice error: ${error}`, "err");
+
+  recog.onend = () => {
+    btn.classList.remove("listening");
+    btn.textContent = "🎤 Say destination";
+    document.getElementById("voiceStatus").textContent = "";
+  };
+
+  recog.start();
+}
+
+// ── HELPERS ───────────────────────────────────────────────────────────────
+function showSpinner(on) {
+  document.getElementById("uploadSpinner").classList.toggle("active", on);
+}
+
+function setBadge(id, text, cls) {
+  const el = document.getElementById(id);
+  el.textContent = text;
+  el.className   = "badge" + (cls ? ` ${cls}` : "");
+}
+
+// ── TOAST ─────────────────────────────────────────────────────────────────
+function showToast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  // Remove after 3s then clear text so it doesn't flicker on re-show
+  clearTimeout(t._hideTimer);
+  t._hideTimer = setTimeout(() => {
+    t.classList.remove("show");
+  }, 3000);
+}
+
+// ── NORTH ARROW ───────────────────────────────────────────────────────────
+// Draws a compass indicator in the top-right corner of the canvas.
+// direction is 'N','S','E','W' — the cardinal direction of the blueprint's
+// north marker as detected by the OCR parser.
+function drawNorthArrow(ctx, canvasW, canvasH) {
+  const pad = 14;
+  const r   = 18;
+  const cx  = canvasW - r - pad;
+  const cy  = r + pad;
+
+  // The rotation maps the blueprint's north direction to the canvas:
+  // 'N' = north is up (0 rad), 'E' = north is right (90°), etc.
+  const rotMap = { N: 0, E: Math.PI / 2, S: Math.PI, W: -Math.PI / 2 };
+  const rot = rotMap[detectedOrientation] || 0;
+
+  ctx.save();
+  ctx.translate(cx, cy);
+
+  // Background disc
+  ctx.beginPath();
+  ctx.arc(0, 0, r + 4, 0, 2 * Math.PI);
+  ctx.fillStyle = "rgba(10,10,26,0.82)";
+  ctx.fill();
+  ctx.strokeStyle = "#2a3a50";
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  // Rotate so the N-tip points in the correct canvas direction
+  ctx.rotate(rot);
+
+  // North half — red
+  ctx.beginPath();
+  ctx.moveTo(0, -(r - 1));
+  ctx.lineTo(5,  4);
+  ctx.lineTo(0,  1);
+  ctx.lineTo(-5, 4);
+  ctx.closePath();
+  ctx.fillStyle = "#e03030";
+  ctx.fill();
+
+  // South half — grey
+  ctx.beginPath();
+  ctx.moveTo(0,  (r - 1));
+  ctx.lineTo(5, -4);
+  ctx.lineTo(0, -1);
+  ctx.lineTo(-5,-4);
+  ctx.closePath();
+  ctx.fillStyle = "#445";
+  ctx.fill();
+
+  // Centre dot
+  ctx.beginPath();
+  ctx.arc(0, 0, 2.5, 0, 2 * Math.PI);
+  ctx.fillStyle = "#fff";
+  ctx.fill();
+
+  ctx.rotate(-rot);  // undo rotation before drawing label
+
+  // "N" label above the disc
+  ctx.fillStyle    = "#ccd";
+  ctx.font         = "bold 9px Arial";
+  ctx.textAlign    = "center";
+  ctx.textBaseline = "bottom";
+  ctx.fillText("N", 0, -(r + 3));
+
+  ctx.restore();
+}
+
+// ── INIT ──────────────────────────────────────────────────────────────────
+document.getElementById("unitSelect").addEventListener("change", function() {
+  document.getElementById("unitLabel").textContent = this.value;
+});
+setInterval(pollStatus, 3000);
+pollStatus();
+</script>
+</body>
+</html>
