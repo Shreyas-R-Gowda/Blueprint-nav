@@ -4,7 +4,9 @@ from grid_generator import generate_grid
 
 # ── A* ALGORITHM ───────────────────────────────────────────────────────────
 def heuristic(a, b):
-    return abs(a[0] - b[0]) + abs(a[1] - b[1])
+    dr = abs(a[0] - b[0])
+    dc = abs(a[1] - b[1])
+    return max(dr, dc) + 0.4 * min(dr, dc)  # octile distance for 8-dir grid
 
 def astar(grid, start, goal):
     rows, cols = grid.shape
@@ -30,6 +32,10 @@ def astar(grid, start, goal):
             if grid[r][c] == 1:
                 continue
             diagonal = abs(dr) + abs(dc) == 2
+            # Prevent corner-cutting: both cardinal neighbours must be free
+            if diagonal and (grid[current[0]+dr][current[1]] == 1 or
+                             grid[current[0]][current[1]+dc] == 1):
+                continue
             tentative_g = g_score[current] + (1.4 if diagonal else 1.0)
             neighbor = (r, c)
             if tentative_g < g_score.get(neighbor, float('inf')):

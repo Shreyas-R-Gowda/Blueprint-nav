@@ -79,12 +79,15 @@ def upload():
         )
         print(f"✅ Grid done: {gw}x{gh}, cell={cell_size_px}px, {real_cm_per_cell:.2f} cm/cell")
 
-        # Always inflate — fall back to 10 cm/cell when auto-scale was rejected
-        # so clearance is still physically meaningful (40 cm = 4 cells).
-        effective_cm_per_cell = real_cm_per_cell if scale_applied else 10.0
-        robot_width_cells   = max(1, math.ceil(robot_width_cm / 2.0 / effective_cm_per_cell))
-        safety_margin_cells = max(1, math.ceil(safety_margin / effective_cm_per_cell))
-        inflation_cells     = robot_width_cells + safety_margin_cells
+        if scale_applied:
+            # Real scale known — compute inflation from physical dimensions.
+            robot_width_cells   = max(1, round(robot_width_cm / 2.0 / real_cm_per_cell))
+            safety_margin_cells = max(0, math.floor(safety_margin / real_cm_per_cell))
+        else:
+            # Unknown scale — use 1-cell minimal inflation to avoid sealing doorways.
+            robot_width_cells   = 1
+            safety_margin_cells = 0
+        inflation_cells = robot_width_cells + safety_margin_cells
         inflated = inflate_obstacles(grid,
                                      robot_width_cells=robot_width_cells,
                                      safety_margin_cells=safety_margin_cells)
@@ -98,6 +101,7 @@ def upload():
         state["blueprint_path"]= filepath
         state["grid_size"]     = {"rows": gh, "cols": gw}
         state["real_cm_per_cell"] = real_cm_per_cell
+        state["cell_size_px"]  = cell_size_px
         state["robot_params"]  = {
             "robot_width_cm": robot_width_cm,
             "safety_margin_cm": safety_margin,
@@ -190,7 +194,7 @@ def navigate():
             }), 404
 
         # ── Pixel → grid cell ─────────────────────────────────────────────
-        cell_size = 10
+        cell_size = state.get("cell_size_px", 10)
         rx, ry    = matched["center"]
         goal_col  = rx // cell_size
         goal_row  = ry // cell_size
@@ -271,6 +275,7 @@ def navigate():
             "start":       list(start),
             "goal":        list(goal),
             "path_cells":  len(path),
+            "path":        [list(p) for p in path],
             "commands":    commands,
         })
 

@@ -471,6 +471,8 @@ let fullCmdList        = [];     // commands from last /navigate (never shrinks)
 let currentPath        = [];     // reconstructed waypoints [{row,col}]
 let navGoal            = null;   // {row, col}
 let detectedOrientation = null;  // 'N','S','E','W' from parse result
+let cellSizePx    = 10;          // pixels per grid cell — set from /upload response
+let realCmPerCell = 10.0;        // cm per cell — set from /upload response
 
 // ── LOGGING ───────────────────────────────────────────────────────────────
 function log(msg, type = "info") {
@@ -518,10 +520,12 @@ async function uploadBlueprint() {
 
     parsedRooms = data.rooms || [];
     detectedOrientation = data.orientation?.direction || null;
+    cellSizePx    = data.cell_size_px    || 10;
+    realCmPerCell = data.real_cm_per_cell || 10.0;
     renderRoomButtons(parsedRooms);
 
     const status = data.parse_status;
-    const cmPerCell = data.real_cm_per_cell?.toFixed(1) ?? "10.0";
+    const cmPerCell = realCmPerCell.toFixed(1);
     const inflation = data.inflation_cells ?? "—";
 
     if (status === "COMPLETE") {
@@ -586,7 +590,7 @@ function loadImageToCanvas(file) {
 // so that isolated thin text strokes are removed while thick continuous wall
 // lines survive. Text strokes are ~1-2px wide; wall lines are ~4-5px wide.
 function computeWallGrid(img) {
-  const CELL = 10;
+  const CELL = cellSizePx;
   const W    = img.naturalWidth;
   const H    = img.naturalHeight;
   const GW   = Math.floor(W / CELL);
@@ -646,7 +650,7 @@ function computeWallGrid(img) {
   // Raised from 20% → 35%: any text pixels that survive opening need a higher
   // density before they tip a cell into "wall".
   const dark  = new Int32Array(GH * GW);
-  const LIMIT = CELL * CELL * 0.35;
+  const LIMIT = CELL * CELL * 0.45;
 
   for (let y = 0; y < H; y++) {
     const r = Math.floor(y / CELL);
@@ -671,7 +675,7 @@ function redrawCanvas() {
   if (!blueprintImg) return;
   const canvas = document.getElementById("blueprintCanvas");
   const ctx    = canvas.getContext("2d");
-  const CS     = 10;
+  const CS     = cellSizePx;
 
   // 1. Blueprint base image
   ctx.drawImage(blueprintImg, 0, 0);
@@ -719,13 +723,18 @@ function drawPath(ctx, cs) {
   ctx.stroke();
   ctx.setLineDash([]);
 
-  // Intermediate waypoints
+  // Direction-change waypoints only (skip dense intermediate cells)
   ctx.fillStyle = "#00d4ff";
   for (let i = 1; i < currentPath.length - 1; i++) {
-    ctx.beginPath();
-    ctx.arc(currentPath[i].col * cs + cs / 2,
-            currentPath[i].row * cs + cs / 2, 3, 0, 2 * Math.PI);
-    ctx.fill();
+    const prev = currentPath[i - 1], curr = currentPath[i], next = currentPath[i + 1];
+    const dr1 = curr.row - prev.row, dc1 = curr.col - prev.col;
+    const dr2 = next.row - curr.row, dc2 = next.col - curr.col;
+    if (dr1 !== dr2 || dc1 !== dc2) {          // direction changed → draw dot
+      ctx.beginPath();
+      ctx.arc(curr.col * cs + cs / 2,
+              curr.row * cs + cs / 2, 4, 0, 2 * Math.PI);
+      ctx.fill();
+    }
   }
 
   // Goal marker
@@ -808,8 +817,8 @@ document.getElementById("blueprintCanvas").addEventListener("click", async (e) =
   const scaleY = canvas.height / rect.height;
   const px = (e.clientX - rect.left) * scaleX;
   const py = (e.clientY - rect.top)  * scaleY;
-  const col     = Math.floor(px / 10);
-  const row     = Math.floor(py / 10);
+  const col     = Math.floor(px / cellSizePx);
+  const row     = Math.floor(py / cellSizePx);
   const heading = document.getElementById("headingSelect").value;
 
   robotPose = { row, col, heading };
@@ -901,7 +910,9 @@ async function navigateTo(roomName) {
     const [startRow, startCol] = data.start;
     const [goalRow,  goalCol]  = data.goal;
     navGoal     = { row: goalRow, col: goalCol };
-    currentPath = commandsToPath(startRow, startCol, robotPose.heading, fullCmdList);
+    currentPath = data.path
+      ? data.path.map(p => ({ row: p[0], col: p[1] }))
+      : commandsToPath(startRow, startCol, robotPose.heading, fullCmdList);
 
     redrawCanvas();
     updateStatusPanel();
@@ -927,11 +938,16 @@ function commandsToPath(startRow, startCol, heading, commands) {
     else if (cmd === "L90")          dir = CCW[dir];
     else if (cmd === "R180")         { dir = CW[dir]; dir = CW[dir]; }
     else if (cmd.startsWith("F")) {
-      const cells = parseInt(cmd.slice(1), 10) / 10;
+      const distCm = parseFloat(cmd.slice(1));
+      const cells  = distCm / realCmPerCell;
       const [dr, dc] = DIR[dir];
+      // Add one point per cell so the line follows the grid (no wall shortcuts)
+      const steps = Math.round(cells);
+      for (let s = 1; s <= steps; s++) {
+        pts.push({ row: Math.round(row + dr * s), col: Math.round(col + dc * s) });
+      }
       row += dr * cells;
       col += dc * cells;
-      pts.push({ row: Math.round(row), col: Math.round(col) });
     }
   }
   return pts;
